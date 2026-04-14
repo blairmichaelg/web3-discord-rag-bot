@@ -1,6 +1,6 @@
 """
 Multi-Target Ecosystem Documentation Ingestion Pipeline
-Supports Berachain and Infrared targets via CLI flags.
+Supports: berachain | infrared | dolomite | origami
 """
 
 import os
@@ -138,6 +138,43 @@ TARGETS = {
                 "loader": "recursive",
             },
         ]
+    },
+    "origami": {
+        "collection_name": "origami_ecosystem_v1",
+        "allowed_domains": {"docs.origami.finance"},
+        "blocked_paths": {"/blog/", "/changelog/", "/careers/"},
+        "sources": [
+            {
+                "url": "https://docs.origami.finance",
+                "label": "Full protocol overview",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.origami.finance/the-second-fold-v2/whats-new-in-v2",
+                "label": "v2 architecture, folding mechanics",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.origami.finance/the-second-fold-v2/rewards",
+                "label": "eAPR vs realised APR",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.origami.finance/the-second-fold-v2/collection-and-vault-user-guides/what-are-collections/lovinfrared-collection",
+                "label": "Berachain Infrared integration",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.origami.finance/introduction/what-is-origami",
+                "label": "Core concept explainer",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.origami.finance/the-second-fold-v2/risks",
+                "label": "Risk documentation",
+                "loader": "recursive",
+            },
+        ]
     }
 }
 
@@ -198,7 +235,7 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-Target Ecosystem Ingestion")
-    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite"], help="Target ecosystem to ingest")
+    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite", "origami"], help="Target ecosystem to ingest")
     args = parser.parse_args()
     
     target_config = TARGETS[args.target]

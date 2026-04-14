@@ -1,11 +1,12 @@
 """
-Pendle Finance RAG Discord Bot
-Answers questions using local ChromaDB context + Google Gemini (free tier).
-Supports --mode berachain or --mode infrared
+Web3 Discord RAG Support Bot
+Multi-protocol AI support bot for Web3 Discord communities.
+Supports --mode berachain | infrared | dolomite | origami
 """
 
 import os
 import sys
+import time
 import asyncio
 import argparse
 import traceback
@@ -120,156 +121,232 @@ PROMPTS = {
         "  if the user's question is chain-specific and they haven't said.\n"
         "- Bullet points for multi-part answers. Max 400 words unless\n"
         "  complexity requires more."
+    ),
+    "origami": (
+        "You are the Lead Technical Support AI for Origami Finance,\n"
+        "a one-click automated leverage protocol for yield-bearing\n"
+        "tokens (YBTs) on Ethereum and Berachain.\n"
+        "CORE CONCEPT — explain this in every relevant answer:\n"
+        "- \"Folding\" = Origami's term for automated leverage loops.\n"
+        "  A user deposits a YBT → Origami deposits it as collateral\n"
+        "  in a lending protocol → borrows a stable → buys more YBT\n"
+        "  → repeats. This loop is automated, managed, and unwinds\n"
+        "  automatically. Users do NOT manage health factors manually.\n"
+        "  This is the #1 concept users misunderstand.\n"
+        "KEY PRODUCTS:\n"
+        "- lovTokens: Origami's liquid receipt token for a folded\n"
+        "  position. Holding lovETH means you hold a leveraged ETH\n"
+        "  position managed entirely by Origami. The lovToken price\n"
+        "  reflects the leveraged vault's net value.\n"
+        "- oAC Vaults (Auto-Compounders): Non-leveraged vaults that\n"
+        "  auto-harvest and compound yield. On Berachain, oAC vaults\n"
+        "  wrap Infrared LP positions and auto-compound iBGT rewards.\n"
+        "  Example: oAC BYUSD-HONEY harvests iBGT from Infrared vaults\n"
+        "  automatically — users just hold the oAC token.\n"
+        "- oUSDC: Origami's stablecoin vault — provides liquidity for\n"
+        "  the folding mechanism internally.\n"
+        "CRITICAL MECHANICS — always explain proactively:\n"
+        "1. eAPR vs Realised APR:\n"
+        "   - eAPR (Estimated APR) = what the dApp displays. Ignores\n"
+        "     entry/exit fees. Best for comparing long-run vault yield.\n"
+        "   - Realised APR = actual historical return INCLUDING fees.\n"
+        "     More volatile, especially with high vault inflows/outflows.\n"
+        "   - These WILL look different. This is not a bug.\n"
+        "   - Never tell users the eAPR is guaranteed — it is an estimate.\n"
+        "2. Entry and Exit Fees:\n"
+        "   - Origami charges fees on deposit AND withdrawal to protect\n"
+        "     against economic attacks on the vault share price.\n"
+        "   - These fees accrue to the vault reserves (benefit ALL holders).\n"
+        "   - Short-term users will feel these fees disproportionately.\n"
+        "   - Always mention this when users ask about yield or returns.\n"
+        "3. Liquidation Risk on Folded Positions:\n"
+        "   - While Origami automates leverage, extreme market volatility\n"
+        "     CAN still trigger liquidation of the underlying position.\n"
+        "   - \"No liquidation monitoring needed\" means users don't manually\n"
+        "     monitor — NOT that liquidation is impossible.\n"
+        "   - lovToken value can go to zero in an extreme depeg or crash.\n"
+        "4. Berachain-Specific (oAC vaults):\n"
+        "   - oAC vaults on Berachain connect directly to Infrared vaults.\n"
+        "   - Users earn iBGT → auto-compounded back into the position.\n"
+        "   - These are NOT leveraged — they are yield-optimizing wrappers.\n"
+        "   - Users often confuse oAC vaults with lovToken vaults — always\n"
+        "     clarify which product type the user is asking about.\n"
+        "CHAINS: Origami is deployed on Ethereum and Berachain.\n"
+        "Always clarify which chain if the user's question is chain-specific.\n"
+        "Rules:\n"
+        "- ONLY answer from retrieved documentation context.\n"
+        "- If context is insufficient say: \"I don't have verified docs on\n"
+        "  that — please check docs.origami.finance or ask in Discord.\"\n"
+        "- Never speculate on APR, token prices, or liquidation thresholds.\n"
+        "- Always distinguish lovToken vaults (leveraged) from oAC vaults\n"
+        "  (auto-compounding, non-leveraged) in every relevant answer.\n"
+        "- Bullet points for multi-part answers. Max 400 words unless\n"
+        "  complexity genuinely requires more."
     )
 }
 
 # Parse Args
 parser = argparse.ArgumentParser(description="Multi-Target Ecosystem Discord Bot")
-parser.add_argument("--mode", default="berachain", choices=["berachain", "infrared", "dolomite"], help="Target ecosystem mode")
+parser.add_argument("--mode", default="berachain", choices=["berachain", "infrared", "dolomite", "origami"], help="Target ecosystem mode")
 args = parser.parse_args()
 
-# ── Configuration ────────────────────────────────────────────────────────────
-PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
-COLLECTION_NAME = f"{args.mode}_ecosystem_v1"
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-LLM_MODEL = "gemini-3-flash-preview"
-RETRIEVAL_K = 15
-SYSTEM_PROMPT = PROMPTS[args.mode]
-DISCORD_MAX_LEN = 2000
-TRUNCATION_NOTICE = "\n\n*…response truncated. Ask a more specific question for a complete answer.*"
+def invoke_with_retry(llm, messages, retries=3, delay=2):
+    for attempt in range(retries):
+        try:
+            return llm.invoke(messages)
+        except Exception as e:
+            if attempt < retries - 1:
+                print(f"[RETRY {attempt+1}/{retries}] LLM error: {e}")
+                time.sleep(delay)
+            else:
+                raise
 
-# ── Validate environment ─────────────────────────────────────────────────────
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+def main():
+    import atexit
+    LOCKFILE = "bot.lock"
+    if os.path.exists(LOCKFILE):
+        with open(LOCKFILE) as f:
+            existing_pid = f.read().strip()
+        print(f"[ERROR] Bot already running (PID {existing_pid}). Kill it first or delete bot.lock.")
+        sys.exit(1)
+    
+    with open(LOCKFILE, "w") as f:
+        f.write(str(os.getpid()))
+    
+    atexit.register(lambda: os.remove(LOCKFILE) if os.path.exists(LOCKFILE) else None)
 
-if not DISCORD_TOKEN:
-    print("ERROR: DISCORD_TOKEN is not set in .env")
-    sys.exit(1)
-if not GOOGLE_API_KEY:
-    print("ERROR: GOOGLE_API_KEY is not set in .env")
-    sys.exit(1)
-if not os.path.isdir(PERSIST_DIR):
-    print(f"ERROR: ChromaDB store not found at {PERSIST_DIR}")
-    print("       Run `python ingest.py` first to build the vector store.")
-    sys.exit(1)
+    # ── Configuration ────────────────────────────────────────────────────────────
+    collection_map = {
+        "berachain": "berachain_ecosystem_v1",
+        "infrared":  "infrared_ecosystem_v1",
+        "dolomite":  "dolomite_ecosystem_v1",
+        "origami":   "origami_ecosystem_v1"
+    }
 
-# ── Load vector store ────────────────────────────────────────────────────────
-print(f"Loading ChromaDB vector store ({COLLECTION_NAME})...")
-embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
-vectorstore = Chroma(
-    persist_directory=PERSIST_DIR,
-    embedding_function=embeddings,
-    collection_name=COLLECTION_NAME,
-)
+    if args.mode not in collection_map:
+        raise ValueError(f"Unknown mode: {args.mode}. Valid modes: {list(collection_map.keys())}")
 
-# ── LLM ──────────────────────────────────────────────────────────────────────
-llm = ChatGoogleGenerativeAI(
-    model=LLM_MODEL,
-    google_api_key=GOOGLE_API_KEY,
-    temperature=0.1,
-    max_output_tokens=2048,
-)
+    print(f"[BOOT] Mode: {args.mode} | Collection: {collection_map[args.mode]}")
 
-# ── Discord client ───────────────────────────────────────────────────────────
-intents = discord.Intents.default()
-intents.message_content = True
-client = discord.Client(intents=intents)
+    PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
+    COLLECTION_NAME = collection_map[args.mode]
+    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+    LLM_MODEL = "gemini-2.0-flash-exp"
+    RETRIEVAL_K = 15
+    SYSTEM_PROMPT = PROMPTS[args.mode]
+    DISCORD_MAX_LEN = 2000
+    
+    # ── Validate environment ─────────────────────────────────────────────────────
+    DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
+    if not DISCORD_TOKEN:
+        print("ERROR: DISCORD_TOKEN is not set in .env")
+        sys.exit(1)
+    if not GOOGLE_API_KEY:
+        print("ERROR: GOOGLE_API_KEY is not set in .env")
+        sys.exit(1)
+    if not os.path.isdir(PERSIST_DIR):
+        print(f"ERROR: ChromaDB store not found at {PERSIST_DIR}")
+        print("       Run `python ingest.py` first to build the vector store.")
+        sys.exit(1)
 
-@client.event
-async def on_ready():
-    print(f"Bot online as {client.user} ({client.user.id}) in MODE {args.mode.upper()}")
-    print(f"Serving {vectorstore._collection.count()} chunks from ChromaDB.")
-    print("Waiting for mentions...")
+    # ── Load vector store ────────────────────────────────────────────────────────
+    print(f"Loading ChromaDB vector store ({COLLECTION_NAME})...")
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    vectorstore = Chroma(
+        persist_directory=PERSIST_DIR,
+        embedding_function=embeddings,
+        collection_name=COLLECTION_NAME,
+    )
 
+    # ── LLM ──────────────────────────────────────────────────────────────────────
+    llm = ChatGoogleGenerativeAI(
+        model=LLM_MODEL,
+        google_api_key=GOOGLE_API_KEY,
+        temperature=0.1,
+        max_output_tokens=2048,
+    )
 
-@client.event
-async def on_message(message: discord.Message):
-    # Ignore our own messages
-    if message.author == client.user:
-        return
+    # ── Discord client ───────────────────────────────────────────────────────────
+    intents = discord.Intents.default()
+    intents.message_content = True
+    client = discord.Client(intents=intents)
 
-    # Only respond to mentions
-    if not client.user.mentioned_in(message):
-        return
+    @client.event
+    async def on_ready():
+        print(f"Bot online as {client.user} ({client.user.id}) in MODE {args.mode.upper()}")
+        print(f"Serving {vectorstore._collection.count()} chunks from ChromaDB.")
+        print("Waiting for mentions...")
 
-    print(f"Message received from {message.author}: {message.content}")
-
-    try:
-        # 1. Clean the prompt
-        bot_mention = f"<@{client.user.id}>"
-        clean_content = message.content.replace(bot_mention, "").strip()
-
-        if not clean_content:
-            await message.reply("Beep boop! You mentioned me. Ask a question about the ecosystem!")
+    @client.event
+    async def on_message(message: discord.Message):
+        if message.author == client.user:
+            return
+        if not client.user.mentioned_in(message):
             return
 
-        async with message.channel.typing():
-            # 2. Retrieve Context (offloaded to thread to prevent blocking gateway)
-            docs = await asyncio.to_thread(
-                vectorstore.similarity_search,
-                clean_content,
-                k=RETRIEVAL_K
-            )
-            raw_context = "\n\n".join([doc.page_content for doc in docs])
+        print(f"Message received from {message.author}: {message.content}")
 
-            # 3. Assemble Prompt
-            prompt = f"CONTEXT:\n{raw_context}\n\nQUESTION: {clean_content}"
-            messages = [
-                ("system", SYSTEM_PROMPT),
-                ("user", prompt),
-            ]
+        try:
+            bot_mention = f"<@{client.user.id}>"
+            clean_content = message.content.replace(bot_mention, "").strip()
 
-            # 4. Generate Response (offloaded to thread)
-            response = await asyncio.to_thread(
-                llm.invoke,
-                messages
-            )
+            if not clean_content:
+                await message.reply("Beep boop! You mentioned me. Ask a question about the ecosystem!")
+                return
 
-            # Extract response content (handling Gemini 3 multi-block structure)
-            if isinstance(response.content, list):
-                # Ensure all blocks are joined if it's an array of dicts (Gemini 3 chunking)
-                raw_answer = "".join(
-                    [block.get("text", "") for block in response.content if isinstance(block, dict) and "text" in block]
+            async with message.channel.typing():
+                docs = await asyncio.to_thread(
+                    vectorstore.similarity_search,
+                    clean_content,
+                    k=RETRIEVAL_K
                 )
-                if not raw_answer:
-                    # Fallback string cast
-                    raw_answer = str(response.content)
-            else:
-                raw_answer = str(response.content)
-
-            print(f"[RAG] Answer length: {len(raw_answer)} chars")
-            print(f"[RAG] Full answer:\n{raw_answer}")
-
-            # 5. Discord 2k Char Limit Management
-            if len(raw_answer) <= DISCORD_MAX_LEN:
-                await message.reply(raw_answer)
-            else:
-                chunk = ""
-                # Split roughly over paragraphs
-                parts = raw_answer.split("\n\n")
-                first = True
-                for part in parts:
-                    if len(chunk) + len(part) + 2 > DISCORD_MAX_LEN:
-                        if first:
-                            await message.reply(chunk)
-                            first = False
-                        else:
-                            await message.channel.send(chunk)
-                        chunk = part + "\n\n"
-                    else:
-                        chunk += part + "\n\n"
+                raw_context = "\n\n".join([doc.page_content for doc in docs])
+                prompt = f"CONTEXT:\n{raw_context}\n\nQUESTION: {clean_content}"
                 
-                if chunk:
-                    if first:
-                        await message.reply(chunk.strip())
-                    else:
-                        await message.channel.send(chunk.strip())
+                messages = [
+                    ("system", SYSTEM_PROMPT),
+                    ("user", prompt),
+                ]
 
-    except Exception as e:
-        print(f"ERROR: {e}")
-        traceback.print_exc()
-        await message.reply("\nSomething went wrong while consulting the documentation. Please try again.")
+                response = await asyncio.to_thread(
+                    invoke_with_retry,
+                    llm,
+                    messages
+                )
+
+                raw_answer = str(response.content)
+                print(f"[RAG] Full answer:\n{raw_answer}")
+
+                if len(raw_answer) <= DISCORD_MAX_LEN:
+                    await message.reply(raw_answer)
+                else:
+                    parts = raw_answer.split("\n\n")
+                    chunk = ""
+                    first = True
+                    for part in parts:
+                        if len(chunk) + len(part) + 2 > DISCORD_MAX_LEN:
+                            if first:
+                                await message.reply(chunk.strip())
+                                first = False
+                            else:
+                                await message.channel.send(chunk.strip())
+                            chunk = part + "\n\n"
+                        else:
+                            chunk += part + "\n\n"
+                    if chunk:
+                        if first:
+                            await message.reply(chunk.strip())
+                        else:
+                            await message.channel.send(chunk.strip())
+
+        except Exception as e:
+            print(f"ERROR: {e}")
+            traceback.print_exc()
+            await message.reply("\nSomething went wrong. Please try again.")
+
+    client.run(DISCORD_TOKEN)
 
 if __name__ == "__main__":
-    client.run(DISCORD_TOKEN)
+    main()
