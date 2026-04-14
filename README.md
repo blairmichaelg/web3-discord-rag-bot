@@ -39,6 +39,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | Berachain | Berachain L1 | `berachain_ecosystem_v1` | 1,098 | ✅ Live |
 | Infrared Finance | Berachain | `infrared_ecosystem_v1` | 533 | ✅ Live |
 | Dolomite | Arbitrum / Berachain / Mantle | `dolomite_ecosystem_v1` | 606 | ✅ Live |
+| Origami Finance | Ethereum / Berachain | `origami_ecosystem_v1` | 316 | ✅ Live |
 | Pendle Finance | Ethereum / Arbitrum | `pendle_ecosystem_v1` | Archive | 📁 Demo Only |
 | Mantle Network | Ethereum L2 | `mantle_ecosystem_v1` | Archive | 📁 Demo Only |
 
@@ -64,11 +65,13 @@ documentation — zero hallucination, zero data leaving your pipeline.
 python ingest.py --target berachain
 python ingest.py --target infrared
 python ingest.py --target dolomite
+python ingest.py --target origami
 
 # Run the bot for a specific protocol
 python bot.py --mode berachain
 python bot.py --mode infrared
 python bot.py --mode dolomite
+python bot.py --mode origami
 ```
 
 ---
