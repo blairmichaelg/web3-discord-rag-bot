@@ -1,0 +1,307 @@
+"""
+Multi-Target Ecosystem Documentation Ingestion Pipeline
+Supports Berachain and Infrared targets via CLI flags.
+"""
+
+import os
+import sys
+import time
+import shutil
+import argparse
+import warnings
+from urllib.parse import urlparse
+from dotenv import load_dotenv
+from langchain_core.embeddings import Embeddings
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+from langchain_community.document_loaders import RecursiveUrlLoader, GitbookLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+load_dotenv()
+
+# ── Configuration ────────────────────────────────────────────────────────────
+PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 100
+
+TARGETS = {
+    "berachain": {
+        "collection_name": "berachain_ecosystem_v1",
+        "allowed_domains": {"docs.berachain.com"},
+        "blocked_paths": {"/changelog/", "/blog/", "/careers/"},
+        "sources": [
+            {
+                "url": "https://docs.berachain.com/general/proof-of-liquidity/overview",
+                "label": "PoL Mechanics",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.berachain.com/general/tokens/bgt",
+                "label": "BGT Mechanics",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.berachain.com/general/introduction/what-is-berachain",
+                "label": "Core Concepts",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.berachain.com/general/help/glossary",
+                "label": "Glossary",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.berachain.com/build/getting-started/overview",
+                "label": "Dev Onboarding",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.berachain.com",
+                "label": "Full Berachain Docs",
+                "loader": "recursive",
+            },
+        ]
+    },
+    "infrared": {
+        "collection_name": "infrared_ecosystem_v1",
+        "allowed_domains": {"infrared.finance"},
+        "blocked_paths": {"/blog/", "/changelog/", "/careers/"},
+        "sources": [
+            {
+                "url": "https://infrared.finance/docs",
+                "label": "Full Protocol Overview",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://infrared.finance/education/ibgt",
+                "label": "iBGT Mechanics",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://infrared.finance/education/ibera",
+                "label": "iBERA Mechanics",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://infrared.finance/docs/tokens",
+                "label": "Tokens & Contracts",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://infrared.finance/docs/ibgt-rewards",
+                "label": "Reward APR Mechanics",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://infrared.finance/docs/berachain",
+                "label": "Berachain Context",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://infrared.finance/docs/developers/contract-deployments",
+                "label": "Contract Addresses",
+                "loader": "recursive",
+            },
+        ]
+    },
+    "dolomite": {
+        "collection_name": "dolomite_ecosystem_v1",
+        "allowed_domains": {"docs.dolomite.io"},
+        "blocked_paths": {"/blog/", "/changelog/", "/careers/"},
+        "sources": [
+            {
+                "url": "https://docs.dolomite.io",
+                "label": "Full Protocol Overview",
+                "loader": "gitbook",
+            },
+            {
+                "url": "https://docs.dolomite.io/dolomite-governance",
+                "label": "veDOLO Governance Mechanics",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.dolomite.io/developer-documentation/zapping-assets",
+                "label": "Asset Zapping Routing",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.dolomite.io/admin-privileges",
+                "label": "Admin Immutable Layer",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.dolomite.io/integrations/berachain-proof-of-liquidity",
+                "label": "Berachain PoL Integration",
+                "loader": "recursive",
+            },
+        ]
+    }
+}
+
+def domain_ok(url: str, allowed: set) -> bool:
+    try:
+        host = urlparse(url).hostname or ""
+        return any(host == d or host.endswith("." + d) for d in allowed)
+    except Exception:
+        return False
+
+def path_ok(url: str, blocked: set) -> bool:
+    path = urlparse(url).path.lower()
+    return not any(seg in path for seg in blocked)
+
+def bs4_extractor(html: str) -> str:
+    time.sleep(0.5)
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "svg", "button"]):
+        tag.decompose()
+    return soup.get_text(separator="\n", strip=True)
+
+def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
+    url = source["url"]
+    label = source["label"]
+    loader_type = source.get("loader", "recursive")
+    print(f"       Loading [{loader_type}]: {url} ({label})...")
+
+    if loader_type == "gitbook":
+        loader = GitbookLoader(
+            web_page=url,
+            load_all_paths=True
+        )
+    else:
+        loader = RecursiveUrlLoader(
+            url=url,
+            max_depth=3,
+            extractor=bs4_extractor,
+            prevent_outside=True,
+            check_response_status=True,
+            timeout=30,
+        )
+
+    docs = loader.load()
+
+    rejected = []
+    filtered = []
+    for doc in docs:
+        doc_url = doc.metadata.get("source", doc.metadata.get("url", ""))
+        if not domain_ok(doc_url, allowed_domains):
+            rejected.append(("domain_reject", doc_url))
+        elif not path_ok(doc_url, blocked_paths):
+            rejected.append(("path_reject", doc_url))
+        else:
+            doc.metadata["ecosystem_source"] = label
+            filtered.append(doc)
+
+    return filtered, rejected
+
+def main():
+    parser = argparse.ArgumentParser(description="Multi-Target Ecosystem Ingestion")
+    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite"], help="Target ecosystem to ingest")
+    args = parser.parse_args()
+    
+    target_config = TARGETS[args.target]
+    collection_name = target_config["collection_name"]
+    allowed_domains = target_config["allowed_domains"]
+    blocked_paths = target_config["blocked_paths"]
+    sources = target_config["sources"]
+
+    # Delete existing collection if any
+    print(f"[0/5] Initiating localized DB flush for {collection_name} if exists (we keep others intact)...")
+    try:
+        # Instead of blowing away PERSIST_DIR, we initialize VectorStore and delete the collection
+        _temp_embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+        _temp_db = Chroma(persist_directory=PERSIST_DIR, embedding_function=_temp_embeddings, collection_name=collection_name)
+        _temp_db.delete_collection()
+    except Exception:
+        pass
+
+    print(f"[1/5] Crawling {len(sources)} {args.target} documentation sources...")
+    all_docs = []
+    all_rejected = []
+    source_stats = {}
+    seen_urls = set()
+
+    for source in sources:
+        try:
+            docs, rejected = load_source(source, allowed_domains, blocked_paths)
+            
+            unique_docs = []
+            for doc in docs:
+                url = doc.metadata.get("source", doc.metadata.get("url", ""))
+                # simple URL normalization
+                url = url.rstrip("/")
+                if url not in seen_urls:
+                    seen_urls.add(url)
+                    unique_docs.append(doc)
+            
+            label = source["label"]
+            source_stats[label] = {"pages": len(unique_docs), "rejected": len(rejected)}
+            all_docs.extend(unique_docs)
+            all_rejected.extend(rejected)
+
+            print(f"       ✓ {label}: {len(unique_docs)} unique pages loaded, {len(rejected)} URLs rejected")
+        except Exception as e:
+            label = source["label"]
+            print(f"       ✗ {label}: FAILED — {e}")
+            source_stats[label] = {"pages": 0, "rejected": 0, "error": str(e)}
+
+    print(f"       Total: {len(all_docs)} pages across all sources.")
+
+    if not all_docs:
+        print("ERROR: No documents loaded from any source. Check URLs and network.")
+        sys.exit(1)
+
+    print(f"[2/5] Splitting into chunks (size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP})...")
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n\n", "\n", ". ", " ", ""],
+    )
+    chunks = splitter.split_documents(all_docs)
+    print(f"       Generated {len(chunks)} chunks.")
+
+    chunk_stats = {}
+    for chunk in chunks:
+        label = chunk.metadata.get("ecosystem_source", "unknown")
+        chunk_stats[label] = chunk_stats.get(label, 0) + 1
+    for label, count in chunk_stats.items():
+        print(f"       → {label}: {count} chunks")
+
+    print(f"[3/5] Embedding with local HuggingFace {EMBEDDING_MODEL} into collection '{collection_name}'...")
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+
+    vectorstore = Chroma.from_documents(
+        documents=chunks,
+        embedding=embeddings,
+        persist_directory=PERSIST_DIR,
+        collection_name=collection_name,
+    )
+
+    print(f"\n[4/5] Ingestion complete.")
+    print(f"=" * 60)
+    print(f"INGESTION REPORT — {collection_name}")
+    print(f"=" * 60)
+
+    for label, stats in source_stats.items():
+        c_count = chunk_stats.get(label, 0)
+        print(f"  {label}:")
+        print(f"    Pages loaded : {stats['pages']}")
+        print(f"    URLs rejected: {stats['rejected']}")
+        print(f"    Chunks stored: {c_count}")
+
+    final_count = vectorstore._collection.count() if vectorstore else 0
+    print(f"\n  ChromaDB collection '{collection_name}': {final_count} total documents")
+
+    if all_rejected:
+        print(f"\n  Rejected URLs (count: {len(all_rejected)}). Showing up to 20:")
+        for reason, url in all_rejected[:20]:
+            print(f"    [{reason}] {url}")
+        if len(all_rejected) > 20:
+            print(f"    ... and {len(all_rejected) - 20} more")
+
+    print(f"\n[5/5] Vector store ready for bot.py (--mode {args.target}).")
+
+if __name__ == "__main__":
+    main()

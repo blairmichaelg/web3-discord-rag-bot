@@ -1,0 +1,7 @@
+discord.py
+langchain
+langchain-google-genai
+langchain-community
+beautifulsoup4
+chromadb
+python-dotenv
