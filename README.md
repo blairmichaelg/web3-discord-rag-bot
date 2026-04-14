@@ -13,6 +13,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | **Pendle Finance** | YT mechanics, dynamic pricing, Real vs. Implied Yield math | [Watch](https://screenapp.io/app/v/OIAKpA2aHZ) |
 | **Mantle Network** | L2 MNT gas requirements, mETH→cmETH bridging, MI4 guardrails | [Watch](https://screenapp.io/app/v/8Z3QAet38v) |
 | **Infrared Finance** | iBGT vs BGT soulbound mechanics, iBGT redemption limits, HONEY earning flow | [Watch](https://screenapp.io/app/v/6vNqxF92kZ) |
+| **Dolomite** | Core vs Modular architecture, Isolation Mode constraints | [Watch](https://screenapp.io/app/v/vHM9IyL1mR) |
 
 ---
 
@@ -37,7 +38,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 |---|---|---|---|---|
 | Berachain | Berachain L1 | `berachain_ecosystem_v1` | 1,098 | ✅ Live |
 | Infrared Finance | Berachain | `infrared_ecosystem_v1` | 533 | ✅ Live |
-| Dolomite | Arbitrum / Berachain / Mantle | `dolomite_ecosystem_v1` | TBD | ✅ Live |
+| Dolomite | Arbitrum / Berachain / Mantle | `dolomite_ecosystem_v1` | 606 | ✅ Live |
 | Pendle Finance | Ethereum / Arbitrum | `pendle_ecosystem_v1` | Archive | 📁 Demo Only |
 | Mantle Network | Ethereum L2 | `mantle_ecosystem_v1` | Archive | 📁 Demo Only |
 
