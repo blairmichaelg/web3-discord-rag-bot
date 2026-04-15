@@ -190,14 +190,19 @@ parser = argparse.ArgumentParser(description="Multi-Target Ecosystem Discord Bot
 parser.add_argument("--mode", default="berachain", choices=["berachain", "infrared", "dolomite", "origami"], help="Target ecosystem mode")
 args = parser.parse_args()
 
-def invoke_with_retry(llm, messages, retries=3, delay=2):
+llm_semaphore = asyncio.Semaphore(1)
+
+def invoke_with_retry(llm, messages, retries=2):
     for attempt in range(retries):
         try:
             return llm.invoke(messages)
         except Exception as e:
+            err = str(e).lower()
+            is_quota = "quota" in err or "429" in err or "resource_exhausted" in err
+            wait = 65 if is_quota else 2
             if attempt < retries - 1:
-                print(f"[RETRY {attempt+1}/{retries}] LLM error: {e}")
-                time.sleep(delay)
+                print(f"[RETRY {attempt+1}/{retries}] {'Quota hit — waiting 65s' if is_quota else f'LLM error: {e}'}")
+                time.sleep(wait)
             else:
                 raise
 
@@ -231,7 +236,7 @@ def main():
     PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
     COLLECTION_NAME = collection_map[args.mode]
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-    LLM_MODEL = "gemini-2.0-flash-exp"
+    LLM_MODEL = "gemini-2.5-flash"
     RETRIEVAL_K = 15
     SYSTEM_PROMPT = PROMPTS[args.mode]
     DISCORD_MAX_LEN = 2000
@@ -293,16 +298,26 @@ def main():
             clean_content = message.content.replace(bot_mention, "").strip()
 
             if not clean_content:
-                await message.reply("Beep boop! You mentioned me. Ask a question about the ecosystem!")
+                await message.reply(f"Hey! Ask me anything about {args.mode.capitalize()} and I'll pull it straight from the official docs.")
                 return
 
             async with message.channel.typing():
-                docs = await asyncio.to_thread(
-                    vectorstore.similarity_search,
+                scored_docs = await asyncio.to_thread(
+                    vectorstore.similarity_search_with_score,
                     clean_content,
-                    k=RETRIEVAL_K
+                    k=15
                 )
-                raw_context = "\n\n".join([doc.page_content for doc in docs])
+                # ChromaDB returns cosine distance — lower = more relevant. Filter > 0.8 = noise
+                docs = [doc for doc, score in scored_docs if score < 0.8]
+                if not docs:
+                    docs = [scored_docs[0][0]] if scored_docs else [] # Always include at least the best match
+                
+                context_parts = []
+                for doc in docs:
+                    source = doc.metadata.get("source", doc.metadata.get("url", "unknown"))
+                    context_parts.append(f"[Source: {source}]\n{doc.page_content}")
+                raw_context = "\n\n---\n\n".join(context_parts)
+                
                 prompt = f"CONTEXT:\n{raw_context}\n\nQUESTION: {clean_content}"
                 
                 messages = [
@@ -310,11 +325,12 @@ def main():
                     ("user", prompt),
                 ]
 
-                response = await asyncio.to_thread(
-                    invoke_with_retry,
-                    llm,
-                    messages
-                )
+                async with llm_semaphore:
+                    response = await asyncio.to_thread(
+                        invoke_with_retry,
+                        llm,
+                        messages
+                    )
 
                 raw_answer = str(response.content)
                 print(f"[RAG] Full answer:\n{raw_answer}")
@@ -342,9 +358,13 @@ def main():
                             await message.channel.send(chunk.strip())
 
         except Exception as e:
-            print(f"ERROR: {e}")
+            query_preview = clean_content[:100] if 'clean_content' in locals() else '[unparsed]'
+            err_str = str(e).lower()
+            is_quota = "quota" in err_str or "429" in err_str or "resource_exhausted" in err_str
+            print(f"[ERROR] {discord.utils.utcnow()} | User: {message.author} | Query: {query_preview}")
             traceback.print_exc()
-            await message.reply("\nSomething went wrong. Please try again.")
+            user_msg = "I'm at my API limit right now — please try again in a minute." if is_quota else "Something went wrong. Please try again."
+            await message.reply(user_msg)
 
     client.run(DISCORD_TOKEN)
 
