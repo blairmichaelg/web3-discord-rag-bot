@@ -192,16 +192,25 @@ args = parser.parse_args()
 
 llm_semaphore = asyncio.Semaphore(1)
 
-def invoke_with_retry(llm, messages, retries=2):
+def invoke_with_retry(llm, messages, retries=3):
     for attempt in range(retries):
         try:
             return llm.invoke(messages)
         except Exception as e:
             err = str(e).lower()
             is_quota = "quota" in err or "429" in err or "resource_exhausted" in err
-            wait = 65 if is_quota else 2
+            is_overload = "503" in err or "unavailable" in err or "overloaded" in err
+            if is_quota:
+                wait = 65
+                label = "Quota hit — waiting 65s"
+            elif is_overload:
+                wait = 30
+                label = f"Server overloaded (503) — waiting 30s"
+            else:
+                wait = 3
+                label = f"LLM error: {e}"
             if attempt < retries - 1:
-                print(f"[RETRY {attempt+1}/{retries}] {'Quota hit — waiting 65s' if is_quota else f'LLM error: {e}'}")
+                print(f"[RETRY {attempt+1}/{retries}] {label}")
                 time.sleep(wait)
             else:
                 raise
@@ -307,10 +316,16 @@ def main():
                     clean_content,
                     k=15
                 )
-                # ChromaDB returns cosine distance — lower = more relevant. Filter > 0.8 = noise
-                docs = [doc for doc, score in scored_docs if score < 0.8]
-                if not docs:
-                    docs = [scored_docs[0][0]] if scored_docs else [] # Always include at least the best match
+                # ChromaDB returns L2 distance (0-2 range), not cosine (0-1).
+                docs = [doc for doc, score in scored_docs if score < 1.2]
+                if len(docs) < 5:
+                    # Enforce minimum floor — take top N by score even if above threshold
+                    top = [doc for doc, score in scored_docs[:5]]
+                    seen = {id(d) for d in docs}
+                    for d in top:
+                        if id(d) not in seen:
+                            docs.append(d)
+                            seen.add(id(d))
                 
                 context_parts = []
                 for doc in docs:
@@ -360,7 +375,7 @@ def main():
         except Exception as e:
             query_preview = clean_content[:100] if 'clean_content' in locals() else '[unparsed]'
             err_str = str(e).lower()
-            is_quota = "quota" in err_str or "429" in err_str or "resource_exhausted" in err_str
+            is_quota = "quota" in err_str or "429" in err_str or "resource_exhausted" in err_str or "503" in err_str or "unavailable" in err_str
             print(f"[ERROR] {discord.utils.utcnow()} | User: {message.author} | Query: {query_preview}")
             traceback.print_exc()
             user_msg = "I'm at my API limit right now — please try again in a minute." if is_quota else "Something went wrong. Please try again."

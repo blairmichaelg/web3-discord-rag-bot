@@ -24,7 +24,7 @@ load_dotenv()
 # ── Configuration ────────────────────────────────────────────────────────────
 PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-CHUNK_SIZE = 800
+CHUNK_SIZE = 500
 CHUNK_OVERLAP = 100
 
 TARGETS = {
@@ -146,32 +146,7 @@ TARGETS = {
         "sources": [
             {
                 "url": "https://docs.origami.finance",
-                "label": "Full protocol overview",
-                "loader": "recursive",
-            },
-            {
-                "url": "https://docs.origami.finance/the-second-fold-v2/whats-new-in-v2",
-                "label": "v2 architecture, folding mechanics",
-                "loader": "recursive",
-            },
-            {
-                "url": "https://docs.origami.finance/the-second-fold-v2/rewards",
-                "label": "eAPR vs realised APR",
-                "loader": "recursive",
-            },
-            {
-                "url": "https://docs.origami.finance/the-second-fold-v2/collection-and-vault-user-guides/what-are-collections/lovinfrared-collection",
-                "label": "Berachain Infrared integration",
-                "loader": "recursive",
-            },
-            {
-                "url": "https://docs.origami.finance/introduction/what-is-origami",
-                "label": "Core concept explainer",
-                "loader": "recursive",
-            },
-            {
-                "url": "https://docs.origami.finance/the-second-fold-v2/risks",
-                "label": "Risk documentation",
+                "label": "Full Origami docs",
                 "loader": "recursive",
             },
         ]
@@ -215,6 +190,9 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
             prevent_outside=True,
             check_response_status=True,
             timeout=30,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
         )
 
     docs = loader.load()
@@ -224,12 +202,18 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
     for doc in docs:
         doc_url = doc.metadata.get("source", doc.metadata.get("url", ""))
         if not domain_ok(doc_url, allowed_domains):
+            # print(f"DEBUG: domain_reject {doc_url} (not in {allowed_domains})")
             rejected.append(("domain_reject", doc_url))
         elif not path_ok(doc_url, blocked_paths):
+            # print(f"DEBUG: path_reject {doc_url}")
             rejected.append(("path_reject", doc_url))
         else:
             doc.metadata["ecosystem_source"] = label
             filtered.append(doc)
+
+    if not filtered and docs:
+        print(f"       !!! ALL {len(docs)} PAGES REJECTED. First Doc Source: {docs[0].metadata.get('source')}")
+        print(f"       ALLOWED: {allowed_domains}")
 
     return filtered, rejected
 
@@ -290,7 +274,7 @@ def main():
         print("ERROR: No documents loaded from any source. Check URLs and network.")
         sys.exit(1)
 
-    print(f"[2/5] Splitting into chunks (size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP})...")
+    print(f"[2/5] Splitting into chunks (size=500, overlap=100)...")
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
