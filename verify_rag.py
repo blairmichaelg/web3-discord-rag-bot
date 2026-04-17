@@ -98,7 +98,7 @@ async def main():
     PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
     COLLECTION_NAME = "origami_ecosystem_v1"
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-    LLM_MODEL = "gemini-2.5-flash"
+    LLM_MODEL = "gemini-3-flash-preview"
     
     print("Loading vector store...")
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
@@ -120,7 +120,7 @@ async def main():
         "If I deposit into a lovToken vault and the underlying collateral drops 60% in a single day, what happens to my position? Can I lose everything?",
         "What are entry and exit fees on Origami vaults, and why would a user who deposits and withdraws within the same week see a much lower return than the displayed eAPR?",
         "How does the Infrared integration work inside Origami's Berachain vaults — specifically where do the iBGT rewards come from and what happens to them?",
-        "What is oUSDC and how does it relate to the folding mechanism — is it something users deposit into directly?"
+        "What is the Origami USDC Boyco vault — what does it do, how long are deposits locked, and what happens at the end of the lock period?"
     ]
     
     results = []

@@ -245,7 +245,7 @@ def main():
     PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
     COLLECTION_NAME = collection_map[args.mode]
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-    LLM_MODEL = "gemini-2.5-flash"
+    LLM_MODEL = "gemini-3-flash-preview"
     RETRIEVAL_K = 15
     SYSTEM_PROMPT = PROMPTS[args.mode]
     DISCORD_MAX_LEN = 2000

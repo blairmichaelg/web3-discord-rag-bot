@@ -149,6 +149,11 @@ TARGETS = {
                 "label": "Full Origami docs",
                 "loader": "recursive",
             },
+            {
+                "url": "https://docs.origami.finance/boyco",
+                "label": "Origami Boyco USDC vault",
+                "loader": "recursive",
+            },
         ]
     }
 }
@@ -167,9 +172,14 @@ def path_ok(url: str, blocked: set) -> bool:
 def bs4_extractor(html: str) -> str:
     time.sleep(0.5)
     soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(["script", "style", "nav", "footer", "header", "svg", "button"]):
+    # Strip all noise elements
+    for tag in soup(["script", "style", "nav", "footer", "header", "svg", "button",
+                      "aside", "form", "[role='navigation']", "[role='complementary']"]):
         tag.decompose()
-    return soup.get_text(separator="\n", strip=True)
+    # Try to isolate main content — GitBook uses <article> or <main>
+    main = soup.find("article") or soup.find("main") or soup.find("div", {"class": lambda c: c and "content" in c.lower()})
+    target = main if main else soup
+    return target.get_text(separator="\n", strip=True)
 
 def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
     url = source["url"]
@@ -262,10 +272,10 @@ def main():
             all_docs.extend(unique_docs)
             all_rejected.extend(rejected)
 
-            print(f"       ✓ {label}: {len(unique_docs)} unique pages loaded, {len(rejected)} URLs rejected")
+            print(f"       [OK] {label}: {len(unique_docs)} unique pages loaded, {len(rejected)} URLs rejected")
         except Exception as e:
             label = source["label"]
-            print(f"       ✗ {label}: FAILED — {e}")
+            print(f"       [ERROR] {label}: FAILED — {e}")
             source_stats[label] = {"pages": 0, "rejected": 0, "error": str(e)}
 
     print(f"       Total: {len(all_docs)} pages across all sources.")
@@ -288,7 +298,7 @@ def main():
         label = chunk.metadata.get("ecosystem_source", "unknown")
         chunk_stats[label] = chunk_stats.get(label, 0) + 1
     for label, count in chunk_stats.items():
-        print(f"       → {label}: {count} chunks")
+        print(f"       -> {label}: {count} chunks")
 
     print(f"[3/5] Embedding with local HuggingFace {EMBEDDING_MODEL} into collection '{collection_name}'...")
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
@@ -302,7 +312,7 @@ def main():
 
     print(f"\n[4/5] Ingestion complete.")
     print(f"=" * 60)
-    print(f"INGESTION REPORT — {collection_name}")
+    print(f"INGESTION REPORT - {collection_name}")
     print(f"=" * 60)
 
     for label, stats in source_stats.items():
