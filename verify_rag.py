@@ -189,9 +189,27 @@ QUESTIONS = {
         "How does the Infrared integration work inside Origami's Berachain vaults — specifically where do the iBGT rewards come from and what happens to them?",
         "What is the Origami USDC Boyco vault — what does it do, how long are deposits locked, and what happens at the end of the lock period?"
     ],
-    "berachain": ["What is Proof of Liquidity and how does BGT emission work?"],
-    "infrared": ["How do Infrared vaults handle BGT delegation and iBGT rewards?"],
-    "dolomite": ["Explain the difference between Dolomite Core and Module layers."]
+    "berachain": [
+        "What are the three core tokens in the Berachain ecosystem ($BERA, $BGT, $HONEY) and what is the specific function of each?",
+        "How does Proof of Liquidity (PoL) differ from traditional Proof of Stake (PoS) in how it secures the network and distributes rewards?",
+        "What is a 'Reward Vault' in Berachain, and how do users earn $BGT emissions by participating in them?",
+        "Is Berachain compatible with the Ethereum Virtual Machine (EVM), and what should a developer know about migrating an existing Ethereum dApp to Berachain?",
+        "If I earn $BGT from a liquidity pool, can I sell it on a DEX like Kodiak? Explain the soulbound nature of the token and the 1:1 burn mechanism."
+    ],
+    "infrared": [
+        "What is $iBGT and how does it allow users to retain liquidity while still participating in Berachain governance?",
+        "What is the difference between $iBGT and $iBERA, and which one would a user want if they primarily care about liquid staking rewards?",
+        "Is $iBGT currently redeemable back for $BGT? Explain the current status of the redemption mechanism and what happens to the underlying backing.",
+        "How are HONEY rewards distributed to iBGT stakers, and where does that yield actually come from in the Berachain PoL system?",
+        "Where can I find the official contract addresses for Infrared's deployment on Berachain, and are there any specific 'educational' resources for new users?"
+    ],
+    "dolomite": [
+        "What is the difference between Dolomite’s Core and Module layers, and why is this distinction important for protocol security?",
+        "How does Isolation Mode work on Dolomite, and what happens to an asset's borrowing capacity when it is placed in this mode?",
+        "What is 'Zapping' on Dolomite and how does the GenericTraderRouter use Odos to simplify user interactions?",
+        "How does veDOLO work and what specific rights or voting power does a user gain by escrowing their DOLO tokens?",
+        "How does Dolomite integrate with Berachain's Proof-of-Liquidity system specifically for reward vaults and incentives?"
+    ]
 }
 
 def extract_text_from_gemini(response) -> str:
