@@ -53,6 +53,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | Retrieval chain | `LangChain` |
 | Vector store | `ChromaDB` (local) |
 | Embeddings | `HuggingFace all-MiniLM-L6-v2` (local, zero quota) |
+| LLM | `Google Gemini 3 Flash Preview` via `langchain-google-genai` |
 | Doc ingestion | `RecursiveUrlLoader` + `GitbookLoader` |
 | Multi-protocol CLI | `argparse` — `--target` / `--mode` flags |
 
@@ -83,7 +84,7 @@ git clone https://github.com/[your-username]/web3-discord-rag-bot
 cd web3-discord-rag-bot
 pip install -r requirements.txt
 cp .env.example .env
-# Fill in your DISCORD_BOT_TOKEN and LLM API key in .env
+# Fill in DISCORD_TOKEN and GOOGLE_API_KEY in .env
 python ingest.py --target <protocol>
 python bot.py --mode <protocol>
 ```
