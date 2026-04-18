@@ -139,10 +139,12 @@ PROMPTS = {
         "  position managed entirely by Origami. The lovToken price\n"
         "  reflects the leveraged vault's net value.\n"
         "- oAC Vaults (Auto-Compounders): Non-leveraged vaults that\n"
-        "  auto-harvest and compound yield. On Berachain, oAC vaults\n"
-        "  wrap Infrared LP positions and auto-compound iBGT rewards.\n"
-        "  Example: oAC BYUSD-HONEY harvests iBGT from Infrared vaults\n"
-        "  automatically — users just hold the oAC token.\n"
+        "  auto-harvest and compound yield. They use NO debt and carry\n"
+        "  NO liquidation risk — principal cannot go to zero from leverage.\n"
+        "  On Berachain, oAC vaults wrap Infrared LP positions and\n"
+        "  auto-compound iBGT rewards automatically.\n"
+        "  This is the key safety distinction from lovTokens — always\n"
+        "  state this explicitly when a user asks about risk or safety.\n"
         "- oUSDC: Origami's stablecoin vault — provides liquidity for\n"
         "  the folding mechanism internally.\n"
         "CRITICAL MECHANICS — always explain proactively:\n"
@@ -181,7 +183,10 @@ PROMPTS = {
         "- Always distinguish lovToken vaults (leveraged) from oAC vaults\n"
         "  (auto-compounding, non-leveraged) in every relevant answer.\n"
         "- Bullet points for multi-part answers. Max 400 words unless\n"
-        "  complexity genuinely requires more."
+        "  complexity genuinely requires more.\n"
+        "- When a user asks which product is 'safer', always name oAC\n"
+        "  vaults explicitly as the lower-risk option and explain why\n"
+        "  (no debt, no leverage, no liquidation risk).\n"
     )
 }
 
@@ -347,26 +352,41 @@ def main():
                         messages
                     )
 
-                raw_answer = str(response.content)
-                print(f"[RAG] Full answer:\n{raw_answer}")
-
+                # ── Extract text from response ──────────────────────────────────────
+                content = response.content
+                if isinstance(content, list):
+                    parts_text = []
+                    for block in content:
+                        if isinstance(block, dict):
+                            parts_text.append(block.get("text", ""))
+                        else:
+                            parts_text.append(str(block))
+                    raw_answer = "\n\n".join(p for p in parts_text if p).strip()
+                else:
+                    raw_answer = str(content).strip()
+                if not raw_answer:
+                    raw_answer = "I wasn't able to generate a response from the docs. Please try again."
+                print(f"[RAG] Full answer ({len(raw_answer)} chars):\n{raw_answer[:300]}...")
+                # ── Send to Discord ─────────────────────────────────────────────────
                 if len(raw_answer) <= DISCORD_MAX_LEN:
                     await message.reply(raw_answer)
                 else:
-                    parts = raw_answer.split("\n\n")
+                    paragraphs = raw_answer.split("\n\n")
                     chunk = ""
                     first = True
-                    for part in parts:
-                        if len(chunk) + len(part) + 2 > DISCORD_MAX_LEN:
-                            if first:
-                                await message.reply(chunk.strip())
-                                first = False
-                            else:
-                                await message.channel.send(chunk.strip())
-                            chunk = part + "\n\n"
+                    for para in paragraphs:
+                        candidate = (chunk + "\n\n" + para).strip() if chunk else para
+                        if len(candidate) > DISCORD_MAX_LEN:
+                            if chunk.strip():
+                                if first:
+                                    await message.reply(chunk.strip())
+                                    first = False
+                                else:
+                                    await message.channel.send(chunk.strip())
+                            chunk = para
                         else:
-                            chunk += part + "\n\n"
-                    if chunk:
+                            chunk = candidate
+                    if chunk.strip():
                         if first:
                             await message.reply(chunk.strip())
                         else:
