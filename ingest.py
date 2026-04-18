@@ -21,6 +21,15 @@ from langchain_community.vectorstores import Chroma
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 load_dotenv()
 
+def safe_collection_count(vs: Chroma) -> int:
+    """Safely get the document count of a collection."""
+    try:
+        if vs and hasattr(vs, "_collection") and vs._collection:
+            return vs._collection.count()
+    except Exception:
+        pass
+    return 0
+
 # ── Configuration ────────────────────────────────────────────────────────────
 PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
@@ -169,8 +178,11 @@ def path_ok(url: str, blocked: set) -> bool:
     path = urlparse(url).path.lower()
     return not any(seg in path for seg in blocked)
 
+SLOW_PARSE = os.getenv("SLOW_PARSE", "0") == "1"
+
 def bs4_extractor(html: str) -> str:
-    time.sleep(0.5)
+    if SLOW_PARSE:
+        time.sleep(0.5)
     soup = BeautifulSoup(html, "html.parser")
     # Strip all noise elements
     for tag in soup(["script", "style", "nav", "footer", "header", "svg", "button",
@@ -240,10 +252,10 @@ def main():
 
     # Delete existing collection if any
     print(f"[0/5] Initiating localized DB flush for {collection_name} if exists (we keep others intact)...")
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
     try:
         # Instead of blowing away PERSIST_DIR, we initialize VectorStore and delete the collection
-        _temp_embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
-        _temp_db = Chroma(persist_directory=PERSIST_DIR, embedding_function=_temp_embeddings, collection_name=collection_name)
+        _temp_db = Chroma(persist_directory=PERSIST_DIR, embedding_function=embeddings, collection_name=collection_name)
         _temp_db.delete_collection()
     except Exception:
         pass
@@ -301,8 +313,6 @@ def main():
         print(f"       -> {label}: {count} chunks")
 
     print(f"[3/5] Embedding with local HuggingFace {EMBEDDING_MODEL} into collection '{collection_name}'...")
-    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
-
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
@@ -322,7 +332,7 @@ def main():
         print(f"    URLs rejected: {stats['rejected']}")
         print(f"    Chunks stored: {c_count}")
 
-    final_count = vectorstore._collection.count() if vectorstore else 0
+    final_count = safe_collection_count(vectorstore) if vectorstore else 0
     print(f"\n  ChromaDB collection '{collection_name}': {final_count} total documents")
 
     if all_rejected:

@@ -197,6 +197,58 @@ args = parser.parse_args()
 
 llm_semaphore = asyncio.Semaphore(1)
 
+def split_for_discord(text: str, limit: int = 2000) -> list[str]:
+    """Split arbitrary text into <= limit-sized chunks, preserving paragraphs where possible."""
+    if len(text) <= limit:
+        return [text]
+
+    parts = text.split("\n\n")
+    chunks: list[str] = []
+    current = ""
+
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        candidate = (current + "\n\n" + part).strip() if current else part
+        if len(candidate) <= limit:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            # Hard-split this long paragraph
+            while len(part) > limit:
+                chunks.append(part[:limit])
+                part = part[limit:]
+            current = part
+
+    if current:
+        chunks.append(current)
+
+    return chunks
+
+def extract_text_from_gemini(response) -> str:
+    """Normalize Gemini 3 Flash response.content into a plain text string."""
+    content = response.content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                parts.append(block.get("text", ""))
+            else:
+                parts.append(str(block))
+        return "\n\n".join(p for p in parts if p).strip()
+    return str(content).strip()
+
+def safe_collection_count(vs: Chroma) -> int:
+    """Safely get the document count of a collection."""
+    try:
+        if vs and hasattr(vs, "_collection") and vs._collection:
+            return vs._collection.count()
+    except Exception:
+        pass
+    return 0
+
 def invoke_with_retry(llm, messages, retries=3):
     for attempt in range(retries):
         try:
@@ -295,7 +347,7 @@ def main():
     @client.event
     async def on_ready():
         print(f"Bot online as {client.user} ({client.user.id}) in MODE {args.mode.upper()}")
-        print(f"Serving {vectorstore._collection.count()} chunks from ChromaDB.")
+        print(f"Serving {safe_collection_count(vectorstore)} chunks from ChromaDB.")
         print("Waiting for mentions...")
 
     @client.event
@@ -332,6 +384,13 @@ def main():
                             docs.append(d)
                             seen.add(id(d))
                 
+                if not docs:
+                    await message.reply(
+                        "I couldn't find any relevant documentation snippets for that question. "
+                        "Please check the official docs or try rephrasing."
+                    )
+                    return
+                
                 context_parts = []
                 for doc in docs:
                     source = doc.metadata.get("source", doc.metadata.get("url", "unknown"))
@@ -353,50 +412,30 @@ def main():
                     )
 
                 # ── Extract text from response ──────────────────────────────────────
-                content = response.content
-                if isinstance(content, list):
-                    parts_text = []
-                    for block in content:
-                        if isinstance(block, dict):
-                            parts_text.append(block.get("text", ""))
-                        else:
-                            parts_text.append(str(block))
-                    raw_answer = "\n\n".join(p for p in parts_text if p).strip()
-                else:
-                    raw_answer = str(content).strip()
+                raw_answer = extract_text_from_gemini(response)
                 if not raw_answer:
                     raw_answer = "I wasn't able to generate a response from the docs. Please try again."
+                
                 print(f"[RAG] Full answer ({len(raw_answer)} chars):\n{raw_answer[:300]}...")
+                
                 # ── Send to Discord ─────────────────────────────────────────────────
-                if len(raw_answer) <= DISCORD_MAX_LEN:
-                    await message.reply(raw_answer)
-                else:
-                    paragraphs = raw_answer.split("\n\n")
-                    chunk = ""
-                    first = True
-                    for para in paragraphs:
-                        candidate = (chunk + "\n\n" + para).strip() if chunk else para
-                        if len(candidate) > DISCORD_MAX_LEN:
-                            if chunk.strip():
-                                if first:
-                                    await message.reply(chunk.strip())
-                                    first = False
-                                else:
-                                    await message.channel.send(chunk.strip())
-                            chunk = para
-                        else:
-                            chunk = candidate
-                    if chunk.strip():
-                        if first:
-                            await message.reply(chunk.strip())
-                        else:
-                            await message.channel.send(chunk.strip())
+                chunks = split_for_discord(raw_answer, DISCORD_MAX_LEN)
+                for i, chunk in enumerate(chunks):
+                    chunk = chunk.strip()
+                    if not chunk:
+                        continue
+                    if i == 0:
+                        await message.reply(chunk)
+                    else:
+                        await message.channel.send(chunk)
 
         except Exception as e:
             query_preview = clean_content[:100] if 'clean_content' in locals() else '[unparsed]'
             err_str = str(e).lower()
             is_quota = "quota" in err_str or "429" in err_str or "resource_exhausted" in err_str or "503" in err_str or "unavailable" in err_str
-            print(f"[ERROR] {discord.utils.utcnow()} | User: {message.author} | Query: {query_preview}")
+            print(
+                f"[ERROR] {discord.utils.utcnow()} | mode={args.mode} | user={message.author} | query={query_preview}"
+            )
             traceback.print_exc()
             user_msg = "I'm at my API limit right now — please try again in a minute." if is_quota else "Something went wrong. Please try again."
             await message.reply(user_msg)
