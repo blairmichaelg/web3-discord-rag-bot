@@ -7,3 +7,14 @@ _test_*.py
 .DS_Store
 *.log
 bot.lock
+
+diagnose_llm.py
+list_models.py
+test_chroma.py
+test_gemini3.py
+test_llm.py
+final_test.txt
+test_out.txt
+test_result.txt
+test_*.py
+test_*.txt
