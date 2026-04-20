@@ -14,6 +14,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | **Mantle Network** | L2 MNT gas requirements, mETH→cmETH bridging, MI4 guardrails | [Watch](https://screenapp.io/app/v/8Z3QAet38v) |
 | **Infrared Finance** | iBGT vs BGT soulbound mechanics, iBGT redemption limits, HONEY earning flow | [Watch](https://screenapp.io/app/v/6vNqxF92kZ) |
 | **Dolomite** | Core vs Modular architecture, Isolation Mode constraints | [Watch](https://screenapp.io/app/v/vHM9IyL1mR) |
+| **Origami Finance** | Folding (leveraged yield loops), lovToken vs oAC vault risk, eAPR vs Realised APR | [Watch](https://www.loom.com/share/e31ed7c8d6cf4156ae227069e47ed115) |
 
 ---
 
@@ -53,7 +54,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | Retrieval chain | `LangChain` |
 | Vector store | `ChromaDB` (local) |
 | Embeddings | `HuggingFace all-MiniLM-L6-v2` (local, zero quota) |
-| LLM | `Google Gemini 3 Flash Preview` via `langchain-google-genai` |
+| LLM | `Groq llama-3.3-70b-versatile` + `Google gemini-2.0-flash` via `langchain-groq` and `langchain-google-genai` (fallback chain, temp=0.1, ~2k max tokens) |
 | Doc ingestion | `RecursiveUrlLoader` + `GitbookLoader` |
 | Multi-protocol CLI | `argparse` — `--target` / `--mode` flags |
 
