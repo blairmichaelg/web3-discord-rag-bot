@@ -13,6 +13,7 @@ import traceback
 import discord
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 
@@ -249,17 +250,51 @@ def safe_collection_count(vs: Chroma) -> int:
         pass
     return 0
 
+def build_llm_with_fallback():
+    groq_key = os.getenv("GROQ_API_KEY")
+    gemini_key = os.getenv("GOOGLE_API_KEY")
+    
+    llms = []
+    
+    if groq_key:
+        llms.append(ChatGroq(
+            model="llama-3.3-70b-versatile",
+            groq_api_key=groq_key,
+            temperature=0.1,
+            max_tokens=2048,
+        ))
+    
+    if gemini_key:
+        llms.append(ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            google_api_key=gemini_key,
+            temperature=0.1,
+            max_output_tokens=2048,
+        ))
+    
+    if not llms:
+        raise ValueError("No LLM API keys found. Set GROQ_API_KEY or GOOGLE_API_KEY in .env")
+    
+    if len(llms) == 1:
+        return llms[0]
+    
+    return llms[0].with_fallbacks([llms[1]])
+
 def invoke_with_retry(llm, messages, retries=3):
     for attempt in range(retries):
         try:
             return llm.invoke(messages)
         except Exception as e:
             err = str(e).lower()
-            is_quota = "quota" in err or "429" in err or "resource_exhausted" in err
+            rate_limit_phrases = [
+                "resource_exhausted", "429", "rate limit", "quota",
+                "rate_limit_exceeded", "too many requests"
+            ]
+            is_quota = any(p in err for p in rate_limit_phrases)
             is_overload = "503" in err or "unavailable" in err or "overloaded" in err
             if is_quota:
                 wait = 65
-                label = "Quota hit — waiting 65s"
+                label = "Rate limit hit — waiting 65s"
             elif is_overload:
                 wait = 30
                 label = f"Server overloaded (503) — waiting 30s"
@@ -332,12 +367,7 @@ def main():
     )
 
     # ── LLM ──────────────────────────────────────────────────────────────────────
-    llm = ChatGoogleGenerativeAI(
-        model=LLM_MODEL,
-        google_api_key=GOOGLE_API_KEY,
-        temperature=0.1,
-        max_output_tokens=2048,
-    )
+    llm = build_llm_with_fallback()
 
     # ── Discord client ───────────────────────────────────────────────────────────
     intents = discord.Intents.default()
@@ -437,7 +467,7 @@ def main():
                 f"[ERROR] {discord.utils.utcnow()} | mode={args.mode} | user={message.author} | query={query_preview}"
             )
             traceback.print_exc()
-            user_msg = "I'm at my API limit right now — please try again in a minute." if is_quota else "Something went wrong. Please try again."
+            user_msg = "I'm currently at capacity — please try again in a moment." if is_quota else "Something went wrong. Please try again."
             await message.reply(user_msg)
 
     client.run(DISCORD_TOKEN)
