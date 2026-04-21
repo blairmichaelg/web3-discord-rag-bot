@@ -1,6 +1,6 @@
 """
 Multi-Target Ecosystem Documentation Ingestion Pipeline
-Supports: berachain | infrared | dolomite | origami | ion | euler
+Supports: berachain | infrared | dolomite | origami | ion | euler | silo
 """
 
 import os
@@ -242,6 +242,31 @@ TARGETS = {
             },
         ]
     },
+    "silo": {
+        "collection_name": "silo_ecosystem_v1",
+        "allowed_domains": {"docs.silo.finance", "silodocs2.netlify.app", "devdocs.silo.finance"},
+        "blocked_paths": {"/blog/", "/changelog/", "/careers/"},
+        "chunk_size": 1000,
+        "chunk_overlap": 150,
+        "sources": [
+            {
+                "url": "https://docs.silo.finance",
+                "label": "Silo User Docs",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://silodocs2.netlify.app",
+                "label": "Silo V3 Architecture Docs",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://devdocs.silo.finance",
+                "label": "Silo Developer Docs",
+                "loader": "recursive",
+                "max_depth": 1,
+            },
+        ]
+    },
 }
 
 def domain_ok(url: str, allowed: set) -> bool:
@@ -291,9 +316,10 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
         )
         docs = loader.load()
     else:
+        depth = source.get("max_depth", 3)
         loader = RecursiveUrlLoader(
             url=url,
-            max_depth=3,
+            max_depth=depth,
             extractor=bs4_extractor,
             prevent_outside=True,
             check_response_status=True,
@@ -326,7 +352,7 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-Target Ecosystem Ingestion")
-    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite", "origami", "ion", "euler"], help="Target ecosystem to ingest")
+    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite", "origami", "ion", "euler", "silo"], help="Target ecosystem to ingest")
     args = parser.parse_args()
     
     target_config = TARGETS[args.target]
