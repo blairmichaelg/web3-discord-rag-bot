@@ -164,7 +164,54 @@ TARGETS = {
                 "loader": "recursive",
             },
         ]
-    }
+    },
+    "ion": {
+        "collection_name": "ion_ecosystem_v1",
+        "allowed_domains": {"docs.ionprotocol.io", "ionprotocol.homes"},
+        "blocked_paths": {"/blog/", "/press/", "/careers/", "/changelog/"},
+        "sources": [
+            {
+                "url": "https://docs.ionprotocol.io",
+                "label": "Ion Docs Root",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.ionprotocol.io/overview/welcome-to-ion-protocol",
+                "label": "Protocol Overview",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.ionprotocol.io/overview/faq",
+                "label": "FAQ & Risk Disclosures",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.ionprotocol.io/ion-protocol/how-ion-works",
+                "label": "How Ion Works (Architecture)",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.ionprotocol.io/supported-collateral/lsts",
+                "label": "Supported Collateral: LSTs",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.ionprotocol.io/security/security-reviews",
+                "label": "Security Reviews & Audits",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.ionprotocol.io/overview/deprecation-guide",
+                "label": "Deprecation Guide",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://ionprotocol.homes/index1.html",
+                "label": "Ion Marketing Overview",
+                "loader": "recursive",
+            },
+        ]
+    },
 }
 
 def domain_ok(url: str, allowed: set) -> bool:
@@ -241,7 +288,7 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-Target Ecosystem Ingestion")
-    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite", "origami"], help="Target ecosystem to ingest")
+    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite", "origami", "ion"], help="Target ecosystem to ingest")
     args = parser.parse_args()
     
     target_config = TARGETS[args.target]
