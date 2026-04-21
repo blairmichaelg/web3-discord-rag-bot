@@ -1,6 +1,6 @@
 """
 Multi-Target Ecosystem Documentation Ingestion Pipeline
-Supports: berachain | infrared | dolomite | origami
+Supports: berachain | infrared | dolomite | origami | ion | euler
 """
 
 import os
@@ -9,6 +9,7 @@ import time
 import shutil
 import argparse
 import warnings
+import requests
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 from langchain_core.embeddings import Embeddings
@@ -207,6 +208,40 @@ TARGETS = {
             },
         ]
     },
+    "euler": {
+        "collection_name": "euler_ecosystem_v1",
+        "allowed_domains": {"docs.euler.finance"},
+        "blocked_paths": {"/blog/", "/changelog/", "/careers/"},
+        "chunk_size": 1000,
+        "chunk_overlap": 150,
+        "sources": [
+            {
+                "url": "https://docs.euler.finance/llms-full.txt",
+                "label": "Full LLM-Ready Doc Dump",
+                "loader": "direct",
+            },
+            {
+                "url": "https://docs.euler.finance/overview/introduction",
+                "label": "Protocol Introduction",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.euler.finance/user-guide/euler-swap",
+                "label": "EulerSwap User Guide",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.euler.finance/developers/euler-swap/how-it-works",
+                "label": "EulerSwap Developer Mechanics",
+                "loader": "recursive",
+            },
+            {
+                "url": "https://docs.euler.finance/developers/data-querying",
+                "label": "Data Querying & Indexing",
+                "loader": "recursive",
+            },
+        ]
+    },
 }
 
 def domain_ok(url: str, allowed: set) -> bool:
@@ -241,11 +276,20 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
     loader_type = source.get("loader", "recursive")
     print(f"       Loading [{loader_type}]: {url} ({label})...")
 
-    if loader_type == "gitbook":
+    if loader_type == "direct":
+        # Direct HTTP fetch for plain-text URLs (e.g., llms-full.txt)
+        from langchain_core.documents import Document
+        resp = requests.get(url, timeout=60, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        })
+        resp.raise_for_status()
+        docs = [Document(page_content=resp.text, metadata={"source": url})]
+    elif loader_type == "gitbook":
         loader = GitbookLoader(
             web_page=url,
             load_all_paths=True
         )
+        docs = loader.load()
     else:
         loader = RecursiveUrlLoader(
             url=url,
@@ -258,8 +302,7 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
             },
         )
-
-    docs = loader.load()
+        docs = loader.load()
 
     rejected = []
     filtered = []
@@ -283,7 +326,7 @@ def load_source(source: dict, allowed_domains: set, blocked_paths: set) -> list:
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-Target Ecosystem Ingestion")
-    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite", "origami", "ion"], help="Target ecosystem to ingest")
+    parser.add_argument("--target", required=True, choices=["berachain", "infrared", "dolomite", "origami", "ion", "euler"], help="Target ecosystem to ingest")
     args = parser.parse_args()
     
     target_config = TARGETS[args.target]
@@ -338,10 +381,12 @@ def main():
         print("ERROR: No documents loaded from any source. Check URLs and network.")
         sys.exit(1)
 
-    print(f"[2/5] Splitting into chunks (size=500, overlap=100)...")
+    target_chunk_size = target_config.get("chunk_size", CHUNK_SIZE)
+    target_chunk_overlap = target_config.get("chunk_overlap", CHUNK_OVERLAP)
+    print(f"[2/5] Splitting into chunks (size={target_chunk_size}, overlap={target_chunk_overlap})...")
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
+        chunk_size=target_chunk_size,
+        chunk_overlap=target_chunk_overlap,
         separators=["\n\n", "\n", ". ", " ", ""],
     )
     chunks = splitter.split_documents(all_docs)
