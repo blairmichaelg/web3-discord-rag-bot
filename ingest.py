@@ -167,7 +167,7 @@ TARGETS = {
     },
     "ion": {
         "collection_name": "ion_ecosystem_v1",
-        "allowed_domains": {"docs.ionprotocol.io", "ionprotocol.homes"},
+        "allowed_domains": {"docs.ionprotocol.io"},
         "blocked_paths": {"/blog/", "/press/", "/careers/", "/changelog/"},
         "sources": [
             {
@@ -203,11 +203,6 @@ TARGETS = {
             {
                 "url": "https://docs.ionprotocol.io/overview/deprecation-guide",
                 "label": "Deprecation Guide",
-                "loader": "recursive",
-            },
-            {
-                "url": "https://ionprotocol.homes/index1.html",
-                "label": "Ion Marketing Overview",
                 "loader": "recursive",
             },
         ]
