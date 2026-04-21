@@ -46,9 +46,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | Origami Finance | Ethereum / Berachain | `origami_ecosystem_v1` | 316 | ✅ Live |
 | Ion Protocol | Ethereum | `ion_ecosystem_v1` | 625 | ✅ Live |
 | Euler Finance | Ethereum / Base / Arbitrum / 11 chains | `euler_ecosystem_v1` | 1,253 | ✅ Live |
-| Silo Finance | Ethereum / Arbitrum / Base / Sonic / Injective | `silo_ecosystem_v1` | TBD | 🔄 In Progress |
-| Pendle Finance | Ethereum / Arbitrum | `pendle_ecosystem_v1` | Archive | 📁 Demo Only |
-| Mantle Network | Ethereum L2 | `mantle_ecosystem_v1` | Archive | 📁 Demo Only |
+| Silo Finance | Ethereum / Arbitrum / Base / Sonic / Injective | `silo_ecosystem_v1` | 422 | ✅ Live |
 
 ---
 
