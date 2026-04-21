@@ -250,20 +250,39 @@ TARGETS = {
         "chunk_overlap": 150,
         "sources": [
             {
-                "url": "https://docs.silo.finance",
-                "label": "Silo User Docs",
+                "url": "https://docs.silo.finance/docs/users/intro",
+                "label": "Silo User Docs (Users)",
+                "loader": "recursive",
+                "max_depth": 4,
+            },
+            {
+                "url": "https://docs.silo.finance/docs/vaults/intro",
+                "label": "Silo User Docs (Vaults)",
+                "loader": "recursive",
+                "max_depth": 4,
+            },
+            {
+                "url": "https://docs.silo.finance/docs/category/protocol-overview",
+                "label": "Silo User Docs (Developers)",
+                "loader": "recursive",
+                "max_depth": 4,
+            },
+            {
+                "url": "https://docs.silo.finance/docs/audits",
+                "label": "Silo Audits",
                 "loader": "recursive",
             },
             {
                 "url": "https://silodocs2.netlify.app",
                 "label": "Silo V3 Architecture Docs",
                 "loader": "recursive",
+                "max_depth": 4,
             },
             {
                 "url": "https://devdocs.silo.finance",
                 "label": "Silo Developer Docs",
                 "loader": "recursive",
-                "max_depth": 1,
+                "max_depth": 3,
             },
         ]
     },
