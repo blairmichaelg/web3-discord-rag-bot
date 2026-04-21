@@ -15,6 +15,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | **Infrared Finance** | iBGT vs BGT soulbound mechanics, iBGT redemption limits, HONEY earning flow | [Watch](https://screenapp.io/app/v/6vNqxF92kZ) |
 | **Dolomite** | Core vs Modular architecture, Isolation Mode constraints | [Watch](https://screenapp.io/app/v/vHM9IyL1mR) |
 | **Origami Finance** | Folding (leveraged yield loops), lovToken vs oAC vault risk, eAPR vs Realised APR | [Watch](https://www.loom.com/share/e31ed7c8d6cf4156ae227069e47ed115) |
+| **Ion Protocol** | Price-agnostic liquidations, validator/consensus-layer triggers, Ion vs Ionic disambiguation, exit flow via repayFullAndWithdraw | [Watch](https://www.loom.com/share/38fff550094e4bf790d736fd4ad7f0df) |
 
 ---
 
@@ -41,6 +42,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | Infrared Finance | Berachain | `infrared_ecosystem_v1` | 533 | ✅ Live |
 | Dolomite | Arbitrum / Berachain / Mantle | `dolomite_ecosystem_v1` | 606 | ✅ Live |
 | Origami Finance | Ethereum / Berachain | `origami_ecosystem_v1` | 316 | ✅ Live |
+| Ion Protocol | Ethereum | `ion_ecosystem_v1` | TBD | ✅ Live |
 | Pendle Finance | Ethereum / Arbitrum | `pendle_ecosystem_v1` | Archive | 📁 Demo Only |
 | Mantle Network | Ethereum L2 | `mantle_ecosystem_v1` | Archive | 📁 Demo Only |
 
