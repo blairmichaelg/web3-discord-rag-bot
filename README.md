@@ -62,6 +62,23 @@ documentation — zero hallucination, zero data leaving your pipeline.
 
 ---
 
+## Project Structure
+
+```text
+web3-discord-rag-bot/
+├── bot.py             # Discord bot — protocol modes, system prompts, RAG chain
+├── ingest.py          # Doc crawler and ChromaDB ingestion pipeline
+├── requirements.txt   # Python dependencies
+├── .env.example       # Environment variable template
+├── .gitignore
+└── tools/
+    ├── check_db.py    # Inspect ChromaDB collection contents
+    ├── sim_test.py    # Simulate bot responses against a collection
+    └── verify_rag.py  # End-to-end RAG retrieval verification
+```
+
+---
+
 ## Usage
 
 ```bash
@@ -83,7 +100,7 @@ python bot.py --mode origami
 ## Setup
 
 ```bash
-git clone https://github.com/[your-username]/web3-discord-rag-bot
+git clone https://github.com/blairmichaelg/web3-discord-rag-bot
 cd web3-discord-rag-bot
 pip install -r requirements.txt
 cp .env.example .env
