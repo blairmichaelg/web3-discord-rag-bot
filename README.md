@@ -16,7 +16,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | **Dolomite** | Core vs Modular architecture, Isolation Mode constraints | [Watch](https://screenapp.io/app/v/vHM9IyL1mR) |
 | **Origami Finance** | Folding (leveraged yield loops), lovToken vs oAC vault risk, eAPR vs Realised APR | [Watch](https://www.loom.com/share/e31ed7c8d6cf4156ae227069e47ed115) |
 | **Ion Protocol** | Price-agnostic liquidations, validator/consensus-layer triggers, Ion vs Ionic disambiguation, exit flow via repayFullAndWithdraw | [Watch](https://www.loom.com/share/38fff550094e4bf790d736fd4ad7f0df) |
-| **Euler Finance** | EVK/EVC vault architecture, EulerSwap triple-use LP mechanic, Earn vs base vault disambiguation, Frontier Market risk | TBD |
+| **Euler Finance** | EVK/EVC vault architecture, EulerSwap triple-use LP mechanic, Earn vs base vault disambiguation, Frontier Market risk | Coming Soon |
 
 ---
 
@@ -43,7 +43,7 @@ documentation — zero hallucination, zero data leaving your pipeline.
 | Infrared Finance | Berachain | `infrared_ecosystem_v1` | 533 | ✅ Live |
 | Dolomite | Arbitrum / Berachain / Mantle | `dolomite_ecosystem_v1` | 606 | ✅ Live |
 | Origami Finance | Ethereum / Berachain | `origami_ecosystem_v1` | 316 | ✅ Live |
-| Ion Protocol | Ethereum | `ion_ecosystem_v1` | TBD | ✅ Live |
+| Ion Protocol | Ethereum | `ion_ecosystem_v1` | 625 | ✅ Live |
 | Euler Finance | Ethereum / Base / Arbitrum / 11 chains | `euler_ecosystem_v1` | 1,253 | ✅ Live |
 | Pendle Finance | Ethereum / Arbitrum | `pendle_ecosystem_v1` | Archive | 📁 Demo Only |
 | Mantle Network | Ethereum L2 | `mantle_ecosystem_v1` | Archive | 📁 Demo Only |
@@ -89,12 +89,16 @@ python ingest.py --target berachain
 python ingest.py --target infrared
 python ingest.py --target dolomite
 python ingest.py --target origami
+python ingest.py --target ion
+python ingest.py --target euler
 
 # Run the bot for a specific protocol
 python bot.py --mode berachain
 python bot.py --mode infrared
 python bot.py --mode dolomite
 python bot.py --mode origami
+python bot.py --mode ion
+python bot.py --mode euler
 ```
 
 ---
@@ -106,7 +110,7 @@ git clone https://github.com/blairmichaelg/web3-discord-rag-bot
 cd web3-discord-rag-bot
 pip install -r requirements.txt
 cp .env.example .env
-# Fill in DISCORD_TOKEN and GOOGLE_API_KEY in .env
+# Fill in DISCORD_TOKEN, GROQ_API_KEY, and GOOGLE_API_KEY in .env
 python ingest.py --target <protocol>
 python bot.py --mode <protocol>
 ```
